@@ -1,0 +1,7 @@
+{
+  "name": "futbol",
+  "version": "1.0.0",
+  "main": "index.js",
+  "author": "Evan Siegel <siegel.evan@gmail.com>",
+  "license": "MIT"
+}
