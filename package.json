@@ -5,7 +5,9 @@
   "author": "Evan Siegel <siegel.evan@gmail.com>",
   "license": "MIT",
   "scripts": {
-    "dev": "nodemon index.ts"
+    "dev": "nodemon index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
   },
   "dependencies": {
     "@slack/bolt": "^3.12.2",
