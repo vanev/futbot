@@ -15,12 +15,6 @@ const slack = new App({
 
 const redis = createClient({ url: process.env.REDIS_URL });
 
-redis.connect().then(() => {
-  redis.ping().then((res) => {
-    console.log(res);
-  });
-});
-
 slack.start(process.env.PORT || 3000).then(() => {
   console.log("⚽️ Fútbot is on the pitch!");
 });
@@ -28,8 +22,6 @@ slack.start(process.env.PORT || 3000).then(() => {
 const espnWorldCupInstance = axios.create({
   baseURL: "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world",
 });
-
-const today = startOfToday();
 
 type ESPNScoreboardEvent = {
   id: string;
@@ -72,14 +64,22 @@ type ESPNEventSummary = {
   standings: unknown;
 };
 
-const refreshGames = () =>
+const refreshGames = () => {
+  const today = startOfToday();
+
+  console.log(`♻️ Refreshing Games for ${today}`);
+
   espnWorldCupInstance
     .get(`/scoreboard?dates=${format("yyyyMMdd")(today)}`)
     .then((res) => res.data.events || [])
     .then((events) => {
       events.forEach((event: ESPNScoreboardEvent) => {
+        console.log(`♻️ Refreshing ${event.shortName} [${event.id}]`);
+
         redis.sIsMember("events", event.id).then((isMember) => {
           if (isMember) return;
+
+          console.log(`♻️ ${event.shortName} is new! [${event.id}]`);
 
           redis.publish("events", JSON.stringify(event));
           redis.sAdd("events", event.id);
@@ -96,6 +96,10 @@ const refreshGames = () =>
                 .then((isMember) => {
                   if (isMember) return;
 
+                  console.log(
+                    `♻️ New Key Moment: ${keyEvent.id}! [${event.id}]`,
+                  );
+
                   redis.publish(
                     `events.${event.id}.keyEvents`,
                     JSON.stringify(keyEvent),
@@ -109,14 +113,23 @@ const refreshGames = () =>
     .catch((reason) => {
       console.error(reason);
     });
+};
 
-cron.schedule("*/1 * * * *", refreshGames);
+redis.connect().then(() => {
+  console.log("♻️ Connected to Redis");
+
+  cron.schedule("*/1 * * * *", refreshGames);
+});
 
 const observable = redis.duplicate();
 
 observable.connect().then(() => {
+  console.log("💬 Connected to Redis");
+
   observable.subscribe("events", (message) => {
     const event = JSON.parse(message);
+
+    console.log(`💬 New Event [${event.id}]`);
 
     slack.client.conversations
       .list()
@@ -124,6 +137,8 @@ observable.connect().then(() => {
       .then((channels) => channels.filter((channel) => channel.is_member))
       .then((channels) => {
         channels.forEach((channel) => {
+          console.log(`💬 Posting Event Thread [${event.id}]`);
+
           return slack.client.chat
             .postMessage({
               channel: channel.id || "",
@@ -131,6 +146,8 @@ observable.connect().then(() => {
             })
             .then((res) => {
               if (!res.ts) return;
+
+              console.log(`💬 Event Thread Posted [${event.id}]`);
 
               redis.set(`events.${event.id}.ts`, res.ts);
             });
@@ -141,8 +158,12 @@ observable.connect().then(() => {
   observable.pSubscribe("events.*.keyEvents", (message, channel) => {
     const [_, eventId, __] = channel.split(".");
 
+    console.log(`💬 New Key Moment [${eventId}]`);
+
     redis.get(`events.${eventId}.ts`).then((ts) => {
       if (!ts) return;
+
+      console.log(`💬 Event Thread Found [${eventId}]`);
 
       const keyEvent = JSON.parse(message);
 
@@ -152,6 +173,8 @@ observable.connect().then(() => {
         .then((channels) => channels.filter((channel) => channel.is_member))
         .then((channels) => {
           channels.forEach((channel) => {
+            console.log(`💬 Posting Key Moment Reply [${eventId}]`);
+
             slack.client.chat
               .postMessage({
                 channel: channel.id || "",
@@ -160,6 +183,8 @@ observable.connect().then(() => {
               })
               .then((res) => {
                 if (!res.ts) return;
+
+                console.log(`💬 Key Moment Reply Posted [${eventId}]`);
 
                 redis.set(
                   `events.${eventId}.keyEvents.${keyEvent.id}.ts`,
