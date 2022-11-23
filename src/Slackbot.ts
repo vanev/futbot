@@ -40,6 +40,20 @@ const flags: Record<string, string> = {
   WAL: "🏴󠁧󠁢󠁷󠁬󠁳󠁿",
 };
 
+const icons: Record<string, string> = {
+  Kickoff: "⏱️",
+  "Yellow Card": "🟨",
+  "Red Card": "🟥",
+  Goal: "⚡️",
+  Halftime: "⏱️",
+  Substitution: "🔄",
+  "Start 2nd Half": "⏱️",
+  "Penalty - Scored": "⚡️",
+  "End Regular Time": "⏱️",
+  "Goal - Volley": "⚡️",
+  "Penalty - Saved": "❌",
+};
+
 const eventsObserver = (
   slackClient: WebClient,
   db: Database.Database,
@@ -113,7 +127,9 @@ const keyEventsObserver = (
           slackClient.chat
             .postMessage({
               channel: channel.id || "",
-              text: keyEvent.text || keyEvent.type.text,
+              text: `${icons[keyEvent.type.text]} ${
+                keyEvent.text || keyEvent.type.text
+              }`,
               thread_ts: ts,
             })
             .then((res) => {
