@@ -2,20 +2,18 @@ import { App } from "@slack/bolt";
 import axios from "axios";
 import { startOfToday } from "date-fns";
 import { format } from "date-fns/fp";
-import dotenv from "dotenv";
 import cron from "node-cron";
 import { createClient } from "redis";
-
-dotenv.config();
+import { get, getRequired } from "./src/Env";
 
 const slack = new App({
-  token: process.env.SLACK_BOT_TOKEN,
-  signingSecret: process.env.SLACK_SIGNING_SECRET,
+  token: getRequired("SLACK_BOT_TOKEN"),
+  signingSecret: getRequired("SLACK_SIGNING_SECRET"),
 });
 
-const redis = createClient({ url: process.env.REDIS_URL });
+const redis = createClient({ url: getRequired("REDIS_URL") });
 
-slack.start(process.env.PORT || 3000).then(() => {
+slack.start(get("PORT") || 3000).then(() => {
   console.log("⚽️ Fútbot is on the pitch!");
 });
 
