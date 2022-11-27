@@ -1,9 +1,10 @@
-import { App } from "@slack/bolt";
-import { get, getRequired } from "./Env";
-import * as Database from "./Database";
-import * as Slack from "./Slack";
-import { Observer } from "./Observable";
 import { WebClient } from "@slack/web-api";
+import { pipe } from "fp-ts/lib/function";
+import { Do, map, apS } from "fp-ts/lib/TaskEither";
+import * as Database from "./Database";
+import { tap } from "./Function";
+import { Observer } from "./Observable";
+import * as Slack from "./Slack";
 
 const flags: Record<string, string> = {
   ARG: "🇦🇷",
@@ -148,23 +149,29 @@ const keyEventsObserver = (
   },
 });
 
-export const initialize = () => {
-  const slack = new App({
-    token: getRequired("SLACK_BOT_TOKEN"),
-    signingSecret: getRequired("SLACK_SIGNING_SECRET"),
-  });
+const alwaysLog = (message: string) => () => {
+  console.log(message);
+};
 
-  slack.start(get("PORT") || 3000).then(() => {
-    console.log("⚽️ Fútbot is on the pitch!");
-  });
+const initializeSlack = pipe(
+  Slack.start,
+  map(tap(alwaysLog("⚽️ Fútbot is on the pitch!"))),
+);
 
-  Database.connect().then((db) => {
-    console.log("💬 Connected to Redis");
+const initializeDB = pipe(
+  Database.create(),
+  map(tap(alwaysLog("💬 Connected to Redis"))),
+);
 
+export const initialize = pipe(
+  Do,
+  apS("slack", initializeSlack),
+  apS("db", initializeDB),
+  map(({ slack, db }) => {
     Database.observe("events")(db)(eventsObserver(slack.client, db));
 
     Database.observe("events.*.keyEvents")(db)(
       keyEventsObserver(slack.client, db),
     );
-  });
-};
+  }),
+);
